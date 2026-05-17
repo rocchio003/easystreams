@@ -96,7 +96,7 @@
     {
       "id": "easystreams-vidxgo",
       "name": "VidxGo",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Streams from VidxGo",
       "resources": ["stream"],
       "contentLanguage": ["it"],
