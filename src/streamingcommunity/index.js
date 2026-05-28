@@ -222,6 +222,23 @@ async function getStreams(id, type, season, episode, providerContext = null) {
   }
 
   try {
+    if (providerContext?.proxyUrl) {
+      const rawPageUrl = url.endsWith("/") ? url : `${url}/`;
+      console.log(`[StreamingCommunity] Proxy mode, returning direct URL: ${rawPageUrl}`);
+      const result = {
+        name: `StreamingCommunity`,
+        title: finalDisplayName,
+        url: rawPageUrl,
+        easyProxySourceUrl: rawPageUrl,
+        quality: "1080p",
+        type: "direct",
+        behaviorHints: {
+          notWebReady: false
+        }
+      };
+      return [formatStream(result, "StreamingCommunity")].filter(s => s !== null);
+    }
+
     console.log(`[StreamingCommunity] Fetching API: ${apiUrl}`);
     const response = await fetch(apiUrl, {
       headers: commonHeaders
@@ -235,25 +252,6 @@ async function getStreams(id, type, season, episode, providerContext = null) {
     if (!embedUrl) {
       console.log("[StreamingCommunity] Could not find embed src in API payload");
       return [];
-    }
-
-    if (providerContext?.proxyUrl) {
-      const rawPageUrl = url.endsWith("/") ? url : `${url}/`;
-      console.log(`[StreamingCommunity] Proxy enabled, returning raw page URL: ${rawPageUrl}`);
-      const result = {
-        name: `StreamingCommunity`,
-        title: finalDisplayName,
-        url: rawPageUrl,
-        easyProxySourceUrl: rawPageUrl,
-        // Stremio addon uses EasyProxy path for StreamingCommunity, so expose default quality here too.
-        quality: "1080p",
-        type: "direct",
-        behaviorHints: {
-          notWebReady: false
-        }
-      };
-
-      return [formatStream(result, "StreamingCommunity")].filter(s => s !== null);
     }
 
     console.log(`[StreamingCommunity] Fetching embed: ${embedUrl}`);

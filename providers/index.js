@@ -875,12 +875,12 @@ var require_cf_bypass = __commonJS({
           if (result && result.status === "ok") {
             return resolve(result);
           }
+          if (result && result.status === "error") {
+            return reject(new Error(result.message || "Unknown Scrapling error"));
+          }
           if (code !== 0) {
             console.error(`[SC][${provider}] Python script fallito con codice ${code}: ${stderr}`);
             return reject(new Error(stderr.trim() || `Python script exited with code ${code}`));
-          }
-          if (result && result.status === "error") {
-            return reject(new Error(result.message));
           }
           if (!result) {
             console.error(`[SC][${provider}] Errore parsing output Python (Vuoto o non valido): ${stdout}`);
@@ -9123,6 +9123,22 @@ var require_streamingcommunity = __commonJS({
           return [];
         }
         try {
+          if (providerContext == null ? void 0 : providerContext.proxyUrl) {
+            const rawPageUrl = url.endsWith("/") ? url : `${url}/`;
+            console.log(`[StreamingCommunity] Proxy mode, returning direct URL: ${rawPageUrl}`);
+            const result = {
+              name: `StreamingCommunity`,
+              title: finalDisplayName,
+              url: rawPageUrl,
+              easyProxySourceUrl: rawPageUrl,
+              quality: "1080p",
+              type: "direct",
+              behaviorHints: {
+                notWebReady: false
+              }
+            };
+            return [formatStream2(result, "StreamingCommunity")].filter((s) => s !== null);
+          }
           console.log(`[StreamingCommunity] Fetching API: ${apiUrl}`);
           const response = yield fetch(apiUrl, {
             headers: commonHeaders
@@ -9136,23 +9152,6 @@ var require_streamingcommunity = __commonJS({
           if (!embedUrl) {
             console.log("[StreamingCommunity] Could not find embed src in API payload");
             return [];
-          }
-          if (providerContext == null ? void 0 : providerContext.proxyUrl) {
-            const rawPageUrl = url.endsWith("/") ? url : `${url}/`;
-            console.log(`[StreamingCommunity] Proxy enabled, returning raw page URL: ${rawPageUrl}`);
-            const result = {
-              name: `StreamingCommunity`,
-              title: finalDisplayName,
-              url: rawPageUrl,
-              easyProxySourceUrl: rawPageUrl,
-              // Stremio addon uses EasyProxy path for StreamingCommunity, so expose default quality here too.
-              quality: "1080p",
-              type: "direct",
-              behaviorHints: {
-                notWebReady: false
-              }
-            };
-            return [formatStream2(result, "StreamingCommunity")].filter((s) => s !== null);
           }
           console.log(`[StreamingCommunity] Fetching embed: ${embedUrl}`);
           const embedResponse = yield fetch(embedUrl, {
