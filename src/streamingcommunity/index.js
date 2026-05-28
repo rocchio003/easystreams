@@ -6,6 +6,9 @@ const { formatStream } = require('../formatter.js');
 require('../fetch_helper.js');
 const { checkQualityFromText } = require('../quality_helper.js');
 
+const STREAMINGCOMMUNITY_PROXY = (typeof process !== 'undefined' && process.env.STREAMINGCOMMUNITY_PROXY) || '';
+const { ProxyAgent } = require('undici');
+
 function safeRequire(modulePath) {
   try {
     return require(modulePath);
@@ -222,26 +225,23 @@ async function getStreams(id, type, season, episode, providerContext = null) {
   }
 
   try {
-    if (providerContext?.proxyUrl) {
-      const rawPageUrl = url.endsWith("/") ? url : `${url}/`;
-      console.log(`[StreamingCommunity] Proxy mode, returning direct URL: ${rawPageUrl}`);
-      const result = {
-        name: `StreamingCommunity`,
-        title: finalDisplayName,
-        url: rawPageUrl,
-        easyProxySourceUrl: rawPageUrl,
-        quality: "1080p",
-        type: "direct",
-        behaviorHints: {
-          notWebReady: false
-        }
-      };
-      return [formatStream(result, "StreamingCommunity")].filter(s => s !== null);
+    const isProxyMode = Boolean(providerContext?.proxyUrl);
+    const proxySocks = STREAMINGCOMMUNITY_PROXY || (typeof process !== 'undefined' && process.env.SOCKS5_PROXY) || '';
+    const useProxyFetch = isProxyMode && proxySocks;
+    let proxyAgent = null;
+    if (useProxyFetch) {
+      try {
+        proxyAgent = new ProxyAgent(proxySocks);
+        console.log(`[StreamingCommunity] Using SOCKS5 proxy for fetches`);
+      } catch (e) {
+        console.warn(`[StreamingCommunity] Failed to create proxy agent: ${e.message}`);
+      }
     }
 
     console.log(`[StreamingCommunity] Fetching API: ${apiUrl}`);
     const response = await fetch(apiUrl, {
-      headers: commonHeaders
+      headers: commonHeaders,
+      dispatcher: proxyAgent || undefined
     });
     if (!response.ok) {
       console.error(`[StreamingCommunity] Failed to fetch page: ${response.status}`);
@@ -254,9 +254,28 @@ async function getStreams(id, type, season, episode, providerContext = null) {
       return [];
     }
 
+    if (providerContext?.proxyUrl) {
+      const rawPageUrl = url.endsWith("/") ? url : `${url}/`;
+      console.log(`[StreamingCommunity] Proxy enabled, returning raw page URL: ${rawPageUrl}`);
+      const result = {
+        name: `StreamingCommunity`,
+        title: finalDisplayName,
+        url: rawPageUrl,
+        easyProxySourceUrl: rawPageUrl,
+        quality: "1080p",
+        type: "direct",
+        behaviorHints: {
+          notWebReady: false
+        }
+      };
+
+      return [formatStream(result, "StreamingCommunity")].filter(s => s !== null);
+    }
+
     console.log(`[StreamingCommunity] Fetching embed: ${embedUrl}`);
     const embedResponse = await fetch(embedUrl, {
-      headers: getEmbedHeaders(embedUrl)
+      headers: getEmbedHeaders(embedUrl),
+      dispatcher: proxyAgent || undefined
     });
     if (!embedResponse.ok) {
       console.error(`[StreamingCommunity] Failed to fetch embed: ${embedResponse.status}`);

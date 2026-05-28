@@ -298,6 +298,8 @@ function getStreamingCommunityBaseUrl() {
 var { formatStream } = require_formatter();
 require_fetch_helper();
 var { checkQualityFromText } = require_quality_helper();
+var STREAMINGCOMMUNITY_PROXY = typeof process !== "undefined" && process.env.STREAMINGCOMMUNITY_PROXY || "";
+var { ProxyAgent } = require("undici");
 function safeRequire(modulePath) {
   try {
     return require(modulePath);
@@ -496,9 +498,36 @@ function getStreams(id, type, season, episode, providerContext = null) {
       return [];
     }
     try {
+      const isProxyMode = Boolean(providerContext == null ? void 0 : providerContext.proxyUrl);
+      const proxySocks = STREAMINGCOMMUNITY_PROXY || typeof process !== "undefined" && process.env.SOCKS5_PROXY || "";
+      const useProxyFetch = isProxyMode && proxySocks;
+      let proxyAgent = null;
+      if (useProxyFetch) {
+        try {
+          proxyAgent = new ProxyAgent(proxySocks);
+          console.log(`[StreamingCommunity] Using SOCKS5 proxy for fetches`);
+        } catch (e) {
+          console.warn(`[StreamingCommunity] Failed to create proxy agent: ${e.message}`);
+        }
+      }
+      console.log(`[StreamingCommunity] Fetching API: ${apiUrl}`);
+      const response = yield fetch(apiUrl, {
+        headers: commonHeaders,
+        dispatcher: proxyAgent || void 0
+      });
+      if (!response.ok) {
+        console.error(`[StreamingCommunity] Failed to fetch page: ${response.status}`);
+        return [];
+      }
+      const apiPayload = yield response.json().catch(() => null);
+      const embedUrl = extractEmbedSrcFromApiPayload(apiPayload);
+      if (!embedUrl) {
+        console.log("[StreamingCommunity] Could not find embed src in API payload");
+        return [];
+      }
       if (providerContext == null ? void 0 : providerContext.proxyUrl) {
         const rawPageUrl = url.endsWith("/") ? url : `${url}/`;
-        console.log(`[StreamingCommunity] Proxy mode, returning direct URL: ${rawPageUrl}`);
+        console.log(`[StreamingCommunity] Proxy enabled, returning raw page URL: ${rawPageUrl}`);
         const result = {
           name: `StreamingCommunity`,
           title: finalDisplayName,
@@ -512,23 +541,10 @@ function getStreams(id, type, season, episode, providerContext = null) {
         };
         return [formatStream(result, "StreamingCommunity")].filter((s) => s !== null);
       }
-      console.log(`[StreamingCommunity] Fetching API: ${apiUrl}`);
-      const response = yield fetch(apiUrl, {
-        headers: commonHeaders
-      });
-      if (!response.ok) {
-        console.error(`[StreamingCommunity] Failed to fetch page: ${response.status}`);
-        return [];
-      }
-      const apiPayload = yield response.json().catch(() => null);
-      const embedUrl = extractEmbedSrcFromApiPayload(apiPayload);
-      if (!embedUrl) {
-        console.log("[StreamingCommunity] Could not find embed src in API payload");
-        return [];
-      }
       console.log(`[StreamingCommunity] Fetching embed: ${embedUrl}`);
       const embedResponse = yield fetch(embedUrl, {
-        headers: getEmbedHeaders(embedUrl)
+        headers: getEmbedHeaders(embedUrl),
+        dispatcher: proxyAgent || void 0
       });
       if (!embedResponse.ok) {
         console.error(`[StreamingCommunity] Failed to fetch embed: ${embedResponse.status}`);
