@@ -8933,7 +8933,12 @@ var require_streamingcommunity = __commonJS({
     require_fetch_helper();
     var { checkQualityFromText } = require_quality_helper();
     var STREAMINGCOMMUNITY_PROXY = typeof process !== "undefined" && process.env.STREAMINGCOMMUNITY_PROXY || "";
-    var { ProxyAgent } = require("undici");
+    var ProxyAgent = null;
+    try {
+      ProxyAgent = require("undici").ProxyAgent;
+    } catch (_) {
+      ProxyAgent = null;
+    }
     function safeRequire(modulePath) {
       try {
         return require(modulePath);
@@ -9134,7 +9139,7 @@ var require_streamingcommunity = __commonJS({
         try {
           const isProxyMode = Boolean(providerContext == null ? void 0 : providerContext.proxyUrl);
           const proxySocks = STREAMINGCOMMUNITY_PROXY || typeof process !== "undefined" && process.env.SOCKS5_PROXY || "";
-          const useProxyFetch = isProxyMode && proxySocks;
+          const useProxyFetch = isProxyMode && proxySocks && typeof ProxyAgent === "function";
           let proxyAgent = null;
           if (useProxyFetch) {
             try {

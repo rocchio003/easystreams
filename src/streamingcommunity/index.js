@@ -7,7 +7,12 @@ require('../fetch_helper.js');
 const { checkQualityFromText } = require('../quality_helper.js');
 
 const STREAMINGCOMMUNITY_PROXY = (typeof process !== 'undefined' && process.env.STREAMINGCOMMUNITY_PROXY) || '';
-const { ProxyAgent } = require('undici');
+let ProxyAgent = null;
+try {
+    ProxyAgent = require('undici').ProxyAgent;
+} catch (_) {
+    ProxyAgent = null;
+}
 
 function safeRequire(modulePath) {
   try {
@@ -227,7 +232,7 @@ async function getStreams(id, type, season, episode, providerContext = null) {
   try {
     const isProxyMode = Boolean(providerContext?.proxyUrl);
     const proxySocks = STREAMINGCOMMUNITY_PROXY || (typeof process !== 'undefined' && process.env.SOCKS5_PROXY) || '';
-    const useProxyFetch = isProxyMode && proxySocks;
+    const useProxyFetch = isProxyMode && proxySocks && typeof ProxyAgent === 'function';
     let proxyAgent = null;
     if (useProxyFetch) {
       try {
