@@ -526,6 +526,10 @@ function extractServiceStreams(apiBase, service, titles, mediaType, season, epis
         Connection: "keep-alive"
       };
       const masterText = yield fetchText(playerData.video_link, probeHeaders);
+      if (!masterText || !/#EXT-X-STREAM-INF/i.test(masterText)) {
+        console.warn(`[NetMirror] ${service.name}: invalid playlist (no video streams), skipping`);
+        return [];
+      }
       const audioLanguages = parseAudioLanguages(masterText);
       const hasItalian = audioLanguages.has("it");
       const quality = checkQualityFromText(masterText) || "720p";
