@@ -334,7 +334,7 @@ async function getStreams(id, type, season, episode, providerContext = null) {
           notWebReady: false
         }
       };
-      if (hasItalianAudio || hasOriginalItalian) result.language = 'Italian';
+      if (hasItalianAudio || hasOriginalItalian) result.language = undefined;
       else result.language = '';
 
       return [formatStream(result, "StreamingCommunity")].filter(s => s !== null);
