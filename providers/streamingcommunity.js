@@ -268,6 +268,26 @@ var require_quality_helper = __commonJS({
         }
       });
     }
+    function checkItalianAudioInPlaylist(_0) {
+      return __async(this, arguments, function* (url, headers = {}) {
+        try {
+          if (!url.includes(".m3u8")) return false;
+          const finalHeaders = __spreadValues({}, headers);
+          if (!finalHeaders["User-Agent"]) finalHeaders["User-Agent"] = USER_AGENT2;
+          const timeoutConfig = createTimeoutSignal(3e3);
+          try {
+            const response = yield fetch(url, { headers: finalHeaders, signal: timeoutConfig.signal });
+            if (!response.ok) return false;
+            const text = yield response.text();
+            return /#EXT-X-MEDIA:TYPE=AUDIO.*(?:LANGUAGE="it"|LANGUAGE="ita"|NAME="Italian"|NAME="Ita")/i.test(text);
+          } finally {
+            if (typeof timeoutConfig.cleanup === "function") timeoutConfig.cleanup();
+          }
+        } catch (e) {
+          return false;
+        }
+      });
+    }
     function checkQualityFromText2(text) {
       if (!text) return null;
       if (/RESOLUTION=\d+x2160/i.test(text) || /RESOLUTION=2160/i.test(text)) return "4K";
@@ -288,7 +308,7 @@ var require_quality_helper = __commonJS({
       if (urlPath.includes("360")) return "360p";
       return null;
     }
-    module2.exports = { checkQualityFromPlaylist, getQualityFromUrl, checkQualityFromText: checkQualityFromText2 };
+    module2.exports = { checkQualityFromPlaylist, getQualityFromUrl, checkQualityFromText: checkQualityFromText2, checkItalianAudioInPlaylist };
   }
 });
 
@@ -444,23 +464,6 @@ function getMetadata(id, type) {
     }
   });
 }
-function hasGuardaFallbackResults(id, type, season, episode, providerContext) {
-  return __async(this, null, function* () {
-    const normalizedType = String(type).toLowerCase();
-    const checks = [];
-    if (normalizedType === "movie" && guardahd && typeof guardahd.getStreams === "function") {
-      checks.push(
-        guardahd.getStreams(id, normalizedType, season, episode).then((streams) => Array.isArray(streams) && streams.length > 0).catch((e) => {
-          console.warn("[StreamingCommunity] GuardaHD fallback check failed:", e);
-          return false;
-        })
-      );
-    }
-    if (checks.length === 0) return false;
-    const results = yield Promise.all(checks);
-    return results.some(Boolean);
-  });
-}
 function getStreams(id, type, season, episode, providerContext = null) {
   return __async(this, null, function* () {
     const requestedType = String(type).toLowerCase();
@@ -576,9 +579,7 @@ function getStreams(id, type, season, episode, providerContext = null) {
             if (detected) quality = detected;
             const originalLanguageItalian = metadata && (metadata.original_language === "it" || metadata.original_language === "ita");
             if (!hasItalianAudio && !originalLanguageItalian) {
-              console.log(`[StreamingCommunity] No Italian audio found. Checking fallback.`);
-              const fallbackOk = yield hasGuardaFallbackResults(id, normalizedType, resolvedSeason, episode, providerContext);
-              if (!fallbackOk) return [];
+              console.log(`[StreamingCommunity] No Italian audio found. Showing without flag.`);
             }
           }
         } catch (e) {

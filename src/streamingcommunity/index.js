@@ -312,9 +312,7 @@ async function getStreams(id, type, season, episode, providerContext = null) {
           const originalLanguageItalian = metadata && (metadata.original_language === 'it' || metadata.original_language === 'ita');
 
           if (!hasItalianAudio && !originalLanguageItalian) {
-            console.log(`[StreamingCommunity] No Italian audio found. Checking fallback.`);
-            const fallbackOk = await hasGuardaFallbackResults(id, normalizedType, resolvedSeason, episode, providerContext);
-            if (!fallbackOk) return [];
+            console.log(`[StreamingCommunity] No Italian audio found. Showing without flag.`);
           }
         }
       } catch (e) {
