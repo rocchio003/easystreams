@@ -432,10 +432,11 @@ var require_formatter = __commonJS({
         behaviorHints.proxyHeaders.request = finalHeaders;
         behaviorHints.headers = finalHeaders;
       }
+      const providerExplicitNotWebReady = stream.behaviorHints && "notWebReady" in stream.behaviorHints;
       const shouldForceNotWebReady = shouldForceNotWebReadyForPlugin(stream, providerName, finalHeaders, behaviorHints);
       if (!isStreamingCommunityProvider && shouldForceNotWebReady) {
         behaviorHints.notWebReady = true;
-      } else {
+      } else if (!providerExplicitNotWebReady) {
         delete behaviorHints.notWebReady;
       }
       const finalName = pName;
@@ -12817,7 +12818,11 @@ var require_cinemacity = __commonJS({
             url: streamUrl,
             quality: "1080p",
             type: "hls",
-            behaviorHints: { notWebReady: true }
+            behaviorHints: { notWebReady: true },
+            headers: {
+              "Referer": "https://cinemacity.cc/",
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+            }
           };
           return [formatStream(result, "CinemaCity")];
         } catch (e) {
