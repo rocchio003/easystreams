@@ -8489,13 +8489,25 @@ if (!IS_SERVER) {
         const year = (showInfo.first_air_date || showInfo.release_date || "").split("-")[0];
         const posterPath = showInfo.poster_path || "";
         console.log(`[Guardoserie] Searching for: ${title} / ${originalTitle} (${year})`);
+        const genQueries = (t) => {
+          const q = (t || "").toLowerCase().trim();
+          if (!q || q.length < 3) return [];
+          const results = [q];
+          const clean = q.replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
+          const words = clean.split(/\s+/).filter((w) => w.length > 2);
+          if (words.length > 1) results.push(words.slice(0, 2).join(" "));
+          if (words.length > 0 && words[0] !== q) results.push(words[0]);
+          const parenMatch = q.match(/^(.+?)\s*[\(\[].+?[\)\]]/);
+          if (parenMatch && parenMatch[1].trim().length > 2) results.push(parenMatch[1].trim());
+          return [...new Set(results)].filter((q2) => q2.length > 2);
+        };
+        const allQueries = [.../* @__PURE__ */ new Set([...genQueries(title), ...genQueries(originalTitle)])].slice(0, 4);
         const searchProvider = (query) => __async(null, null, function* () {
-          var _a2, _b2;
+          var _a2;
           const searchStartedAt = Date.now();
           try {
             yield smartFetch(baseUrl, baseUrl, { provider: "guardoserie", skipBypassOnFailure: true, timeout: 5e3 });
           } catch (e) {
-            console.log(`[Guardoserie] Could not initialize session from homepage`);
           }
           const searchUrl = `${baseUrl}/wp-admin/admin-ajax.php`;
           const body = `s=${encodeURIComponent(query)}&action=searchwp_live_search&swpquery=${encodeURIComponent(query)}&swpengine=default`;
@@ -8514,26 +8526,38 @@ if (!IS_SERVER) {
               timeout: 3e3
             });
             const results = extractSearchResultsFromHtml(ajaxHtml, baseUrl);
-            mark("search_query_done", { q: query, ms: Date.now() - searchStartedAt, results: results.length, source: "ajax" });
+            mark("search_ajax", { q: query, ms: Date.now() - searchStartedAt, results: results.length });
             return results;
           } catch (e) {
             if ((e.code === "ECONNABORTED" || ((_a2 = e.message) == null ? void 0 : _a2.includes("timeout"))) && !(providerContext == null ? void 0 : providerContext.format)) {
               guardoserieDisabledUntil = Date.now() + 36e5;
-              console.log(`[Guardoserie] AJAX Search timeout (1s). Provider disabilitato per l'addon per 1 ora.`);
-            } else if (e.code === "ECONNABORTED" || ((_b2 = e.message) == null ? void 0 : _b2.includes("timeout"))) {
-              console.log(`[Guardoserie] AJAX Search timeout (1s) durante resolve. Non blocco il provider.`);
-            } else {
-              console.log(`[Guardoserie] AJAX Search failed: ${e.message}`);
             }
             return [];
           }
         });
-        const queries = Array.from(new Set([title, originalTitle].filter((q) => q && q.length > 2).map((q) => q.toLowerCase()))).slice(0, 2);
-        const searchPromises = queries.map((q) => searchProvider(q));
-        const allResultsArray = yield Promise.all(searchPromises);
-        let allResults = allResultsArray.flat();
-        mark("search_phase_done", { queries: queries.length, results: allResults.length });
-        allResults = Array.from(new Map(allResults.map((item) => [item.url, item])).values());
+        const searchWp = (query) => __async(null, null, function* () {
+          try {
+            const html = yield smartFetch(`${baseUrl}/?s=${encodeURIComponent(query)}`, baseUrl, {
+              method: "GET",
+              headers: { "Referer": `${baseUrl}/`, "Accept": "text/html" },
+              provider: "guardoserie",
+              skipBypassOnFailure: true,
+              timeout: 5e3
+            });
+            if (!html || html.length < 200) return [];
+            return extractSearchResultsFromHtml(html, baseUrl);
+          } catch (e) {
+            return [];
+          }
+        });
+        let allResults = Array.from(new Map((yield Promise.all(
+          allQueries.map((q) => Promise.all([searchProvider(q), searchWp(q)]))
+        )).flat(2).map((r) => [r.url, r])).values());
+        mark("search_done", { queries: allQueries.length, results: allResults.length });
+        if (allResults.length === 0) {
+          console.log(`[Guardoserie] Nessun risultato per ${title}`);
+          return [];
+        }
         const nTitle = normalizeTitle(title);
         const nOrig = normalizeTitle(originalTitle || "");
         const scoreTitleMatch = (nResult) => {
@@ -8554,15 +8578,11 @@ if (!IS_SERVER) {
         allResults.sort((a, b) => {
           const nA = normalizeTitle(a.title);
           const nB = normalizeTitle(b.title);
-          const exactA = nA === nTitle || nA === nOrig;
-          const exactB = nB === nTitle || nB === nOrig;
-          if (exactA && !exactB) return -1;
-          if (!exactA && exactB) return 1;
+          if ((nA === nTitle || nA === nOrig) && !(nB === nTitle || nB === nOrig)) return -1;
+          if (!(nA === nTitle || nA === nOrig) && (nB === nTitle || nB === nOrig)) return 1;
           return 0;
         });
         targetUrl = null;
-        let bestNoYearMatch = null;
-        let bestNoYearScore = 0;
         const topResults = allResults.slice(0, 5);
         const verificationPromises = topResults.map((result) => __async(null, null, function* () {
           const nResult = normalizeTitle(result.title);
@@ -8582,7 +8602,7 @@ if (!IS_SERVER) {
               const anyYearMatch = pageHtml.match(/release-year\/(\d{4})/i);
               if (anyYearMatch) foundYear = anyYearMatch[1];
             }
-            if (hasTmdbId) {
+            if (hasTmdbId || hasExactPoster) {
               return { url: result.url, score: 3, exact: true };
             }
             if (foundYear) {
@@ -8593,10 +8613,7 @@ if (!IS_SERVER) {
                 return { url: result.url, score: matchScore, exact: true };
               }
             }
-            if (hasTmdbImages && matchScore >= 2) {
-              return { url: result.url, score: matchScore, exact: false };
-            }
-            if (matchScore >= 2 && !foundYear) {
+            if (matchScore >= 2) {
               return { url: result.url, score: matchScore, exact: false };
             }
           } catch (e) {
