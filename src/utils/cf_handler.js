@@ -281,8 +281,10 @@ async function smartFetch(url, domain, options = {}) {
         if (!forceScrapling && options.skipBypassOnFailure) {
             throw err;
         }
-        const errorMsg = err.code === 'ECONNABORTED' || err.message?.includes('timeout') ? 'Timeout richiesta' : (err.response?.status || err.message);
-        console.log(`[CF-HANDLER][${provider}] Fallimento sessione (${errorMsg}), avvio bypass Scrapling...`);
+        if (!forceScrapling) {
+            const errorMsg = err.code === 'ECONNABORTED' || err.message?.includes('timeout') ? 'Timeout richiesta' : (err.response?.status || err.message);
+            console.log(`[CF-HANDLER][${provider}] Fallimento sessione (${errorMsg}), avvio bypass Scrapling...`);
+        }
 
         const challengeUrl = err.response && err.response.url ? err.response.url : url;
         const redirectedData = await retryWithRedirectedSession(challengeUrl);

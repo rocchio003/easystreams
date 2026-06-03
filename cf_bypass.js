@@ -105,6 +105,18 @@ function execPythonBypass(url, provider, options = {}) {
         const child = spawn(pythonExe, args);
         let stdout = '';
         let stderr = '';
+        let killed = false;
+
+        const pyTimeout = setTimeout(() => {
+            if (!killed) {
+                killed = true;
+                console.log(`[SC][${provider}] Processo Python killato dopo timeout ${options.timeout || 60000}ms`);
+                child.kill('SIGKILL');
+                const err = new Error(`Scrapling timeout after ${options.timeout || 60000}ms`);
+                err.code = 'SCRAPLING_TIMEOUT';
+                reject(err);
+            }
+        }, (options.timeout || 60000) + 5000); // +5s buffer oltre il timeout di Scrapling
 
         child.stdout.on('data', (data) => {
             stdout += data.toString();
@@ -115,6 +127,7 @@ function execPythonBypass(url, provider, options = {}) {
         });
 
         child.on('close', (code) => {
+            clearTimeout(pyTimeout);
             // Check if we have valid JSON in stdout despite the exit code or stderr
             // This handles cases where libraries print warnings to stderr and exit with non-zero codes
             let result;
