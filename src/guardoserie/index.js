@@ -367,10 +367,6 @@ if (!IS_SERVER) {
             bench.push({ step, t: Date.now() - benchStart, ...meta });
         };
 
-        if (Date.now() < guardoserieDisabledUntil && !providerContext?.format) {
-            console.log(`[Guardoserie] Provider temporaneamente disabilitato per l'addon fino a: ${new Date(guardoserieDisabledUntil).toISOString()}`);
-            return [];
-        }
         // Se warmup CF in corso, aspetta; se nessuna sessione, salta
         const sessionFile = `${process.cwd()}/cf-session-guardoserie.json`;
         const fs = require('fs');
@@ -498,9 +494,6 @@ if (!IS_SERVER) {
                     mark('search_ajax', { q: query, ms: Date.now() - searchStartedAt, results: results.length });
                     return results;
                 } catch (e) {
-                    if ((e.code === 'ECONNABORTED' || e.message?.includes('timeout')) && !providerContext?.format) {
-                        guardoserieDisabledUntil = Date.now() + 3600000;
-                    }
                     return [];
                 }
             };

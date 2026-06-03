@@ -8430,10 +8430,6 @@ var require_guardoserie = __commonJS({
             if (!STEP_BENCH_ENABLED) return;
             bench.push(__spreadValues({ step, t: Date.now() - benchStart }, meta));
           };
-          if (Date.now() < guardoserieDisabledUntil && !(providerContext == null ? void 0 : providerContext.format)) {
-            console.log(`[Guardoserie] Provider temporaneamente disabilitato per l'addon fino a: ${new Date(guardoserieDisabledUntil).toISOString()}`);
-            return [];
-          }
           const sessionFile = `${process.cwd()}/cf-session-guardoserie.json`;
           const fs = require("fs");
           if (!fs.existsSync(sessionFile)) {
@@ -8524,7 +8520,6 @@ var require_guardoserie = __commonJS({
             };
             const allQueries = [.../* @__PURE__ */ new Set([...genQueries(title), ...genQueries(originalTitle)])].slice(0, 4);
             const searchProvider = (query) => __async(null, null, function* () {
-              var _a2;
               const searchStartedAt = Date.now();
               try {
                 yield smartFetch(baseUrl, baseUrl, { provider: "guardoserie", skipBypassOnFailure: true, timeout: 5e3 });
@@ -8550,9 +8545,6 @@ var require_guardoserie = __commonJS({
                 mark("search_ajax", { q: query, ms: Date.now() - searchStartedAt, results: results.length });
                 return results;
               } catch (e) {
-                if ((e.code === "ECONNABORTED" || ((_a2 = e.message) == null ? void 0 : _a2.includes("timeout"))) && !(providerContext == null ? void 0 : providerContext.format)) {
-                  guardoserieDisabledUntil = Date.now() + 36e5;
-                }
                 return [];
               }
             });
