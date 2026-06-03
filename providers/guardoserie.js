@@ -409,17 +409,6 @@ var require_cf_bypass = __commonJS({
         const child = spawn(pythonExe, args);
         let stdout = "";
         let stderr = "";
-        let killed = false;
-        const pyTimeout = setTimeout(() => {
-          if (!killed) {
-            killed = true;
-            console.log(`[SC][${provider}] Processo Python killato dopo timeout ${options.timeout || 6e4}ms`);
-            child.kill("SIGKILL");
-            const err = new Error(`Scrapling timeout after ${options.timeout || 6e4}ms`);
-            err.code = "SCRAPLING_TIMEOUT";
-            reject(err);
-          }
-        }, (options.timeout || 6e4) + 5e3);
         child.stdout.on("data", (data) => {
           stdout += data.toString();
         });
@@ -427,7 +416,6 @@ var require_cf_bypass = __commonJS({
           stderr += data.toString();
         });
         child.on("close", (code) => {
-          clearTimeout(pyTimeout);
           let result;
           try {
             if (stdout.trim()) {
@@ -519,6 +507,7 @@ var require_cf_handler = __commonJS({
     var sessionCache = /* @__PURE__ */ new Map();
     function smartFetch(_0, _1) {
       return __async(this, arguments, function* (url, domain, options = {}) {
+        var _a, _b;
         const getHost = (u) => {
           try {
             return new URL(u).hostname.replace("www.", "");
@@ -600,11 +589,11 @@ var require_cf_handler = __commonJS({
         let currentUrl = url;
         if (session.url) {
         }
-        if (provider === "guardoserie") {
-          console.log(`[CF-HANDLER][${provider}] Cookie di sessione${session.cookies ? " trovati" : " non trovati, Scrapling li otterr\xE0 freschi"}.`);
+        if (!session.cookies && provider === "guardoserie") {
+          console.warn(`[CF-HANDLER][${provider}] Attenzione: richiesta avviata senza cookie di sessione!`);
         }
         const doRequest = (_02, _12, ..._2) => __async(null, [_02, _12, ..._2], function* (targetUrl2, sess, reqOptions = {}) {
-          var _a, _b, _c, _d, _e;
+          var _a2, _b2, _c, _d, _e;
           const mergedHeaders = __spreadValues({
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
             "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7"
@@ -658,7 +647,7 @@ var require_cf_handler = __commonJS({
               console.log(`[CF-HANDLER][${provider}] Richiesta OK in ${duration}ms.`);
             }
             const data = response.data;
-            const responseUrl = ((_b = (_a = response.request) == null ? void 0 : _a.res) == null ? void 0 : _b.responseUrl) || ((_d = (_c = response.request) == null ? void 0 : _c._redirectable) == null ? void 0 : _d._currentUrl) || ((_e = response.config) == null ? void 0 : _e.url) || targetUrl2;
+            const responseUrl = ((_b2 = (_a2 = response.request) == null ? void 0 : _a2.res) == null ? void 0 : _b2.responseUrl) || ((_d = (_c = response.request) == null ? void 0 : _c._redirectable) == null ? void 0 : _d._currentUrl) || ((_e = response.config) == null ? void 0 : _e.url) || targetUrl2;
             if (response.status >= 400 && response.status !== 403 && response.status !== 503) {
               const quietHttpErrors = reqOptions.quietHttpErrors === true || Array.isArray(reqOptions.quietHttpErrors) && reqOptions.quietHttpErrors.includes(response.status);
               if (!quietHttpErrors) {
@@ -694,8 +683,8 @@ var require_cf_handler = __commonJS({
           return true;
         };
         const isCfStatus = (errorOrResponse) => {
-          var _a;
-          if (errorOrResponse && (errorOrResponse.code === "ECONNABORTED" || ((_a = errorOrResponse.message) == null ? void 0 : _a.includes("timeout")))) {
+          var _a2;
+          if (errorOrResponse && (errorOrResponse.code === "ECONNABORTED" || ((_a2 = errorOrResponse.message) == null ? void 0 : _a2.includes("timeout")))) {
             return true;
           }
           const status = errorOrResponse && errorOrResponse.response ? errorOrResponse.response.status : errorOrResponse && errorOrResponse.status;
@@ -740,85 +729,6 @@ var require_cf_handler = __commonJS({
             throw retryErr;
           }
         });
-        const execScraplingBypass = (err, existingSession, forceScrapling = false) => __async(null, null, function* () {
-          var _a, _b, _c;
-          if (!forceScrapling && options.skipBypassOnFailure) {
-            throw err;
-          }
-          if (!forceScrapling) {
-            const errorMsg = err.code === "ECONNABORTED" || ((_a = err.message) == null ? void 0 : _a.includes("timeout")) ? "Timeout richiesta" : ((_b = err.response) == null ? void 0 : _b.status) || err.message;
-            console.log(`[CF-HANDLER][${provider}] Fallimento sessione (${errorMsg}), avvio bypass Scrapling...`);
-          }
-          const challengeUrl = err.response && err.response.url ? err.response.url : url;
-          const redirectedData = yield retryWithRedirectedSession(challengeUrl);
-          if (redirectedData !== null) {
-            return redirectedData;
-          }
-          let bypassUrl = url;
-          let bypassProvider = provider;
-          try {
-            const challengeHost = getHost(challengeUrl);
-            if (challengeHost && challengeHost !== urlHost) {
-              bypassUrl = challengeUrl;
-              bypassProvider = providerFromHost(challengeHost);
-            }
-          } catch (e) {
-          }
-          const bypassSessionFile = sessionFileForProvider(bypassProvider);
-          if (fs.existsSync(bypassSessionFile)) {
-            try {
-              fs.unlinkSync(bypassSessionFile);
-            } catch (e) {
-            }
-          }
-          const bypassOptions = __spreadProps(__spreadValues({}, options), {
-            timeout: Math.max(options.timeout || 3e4, 3e4)
-          });
-          if (existingSession && existingSession.cookies) {
-            bypassOptions.headers = __spreadValues(__spreadProps(__spreadValues({}, bypassOptions.headers || {}), {
-              "Cookie": existingSession.cookies,
-              "User-Agent": existingSession.userAgent || ((_c = bypassOptions.headers) == null ? void 0 : _c["user-agent"])
-            }), existingSession.requestHeaders || {});
-          }
-          const newSession = yield getClearance(bypassUrl, bypassProvider, bypassOptions);
-          if (!newSession) {
-            throw new Error(`Bypass fallito per ${bypassProvider}`);
-          }
-          if (options.meta && newSession.url) {
-            options.meta.finalUrl = newSession.url;
-          }
-          if (isUsefulHtml(newSession.response)) {
-            return newSession.response;
-          }
-          let finalUrl = bypassUrl === url ? currentUrl : bypassUrl;
-          if (newSession.url) {
-            try {
-              const oldUrlObj = new URL(bypassUrl);
-              const newUrlObj = new URL(newSession.url);
-              const newSessionHasSpecificTarget = newUrlObj.pathname !== "/" || Boolean(newUrlObj.search) || Boolean(newUrlObj.hash) || oldUrlObj.hostname === newUrlObj.hostname;
-              if (newSessionHasSpecificTarget) {
-                finalUrl = newUrlObj.toString();
-                if (options.meta) options.meta.finalUrl = finalUrl;
-              } else if (oldUrlObj.hostname !== newUrlObj.hostname) {
-                oldUrlObj.hostname = newUrlObj.hostname;
-                oldUrlObj.protocol = newUrlObj.protocol;
-                finalUrl = oldUrlObj.toString();
-                if (options.meta) options.meta.finalUrl = finalUrl;
-              }
-            } catch (e) {
-            }
-          }
-          const res = yield doRequest(finalUrl, newSession);
-          updateMetaFinalUrl(res);
-          return res.data;
-        });
-        if (provider === "guardoserie" && !options.skipBypassOnFailure) {
-          console.log(`[CF-HANDLER][${provider}] Bypass diretto Scrapling (senza tentativo axios)...`);
-          const fakeErr = new Error("Forzato bypass Scrapling per guardoserie");
-          fakeErr.code = "ECONNABORTED";
-          fakeErr.response = { status: 403, url: currentUrl };
-          return yield execScraplingBypass(fakeErr, session, true);
-        }
         try {
           const res = yield doRequest(currentUrl, session, options);
           updateMetaFinalUrl(res);
@@ -832,7 +742,64 @@ var require_cf_handler = __commonJS({
           return res.data;
         } catch (err) {
           if (isCfStatus(err)) {
-            return yield execScraplingBypass(err, session);
+            if (options.skipBypassOnFailure) {
+              throw err;
+            }
+            const errorMsg = err.code === "ECONNABORTED" || ((_a = err.message) == null ? void 0 : _a.includes("timeout")) ? "Timeout richiesta" : ((_b = err.response) == null ? void 0 : _b.status) || err.message;
+            console.log(`[CF-HANDLER][${provider}] Fallimento sessione (${errorMsg}), avvio bypass Scrapling...`);
+            const challengeUrl = err.response && err.response.url ? err.response.url : url;
+            const redirectedData = yield retryWithRedirectedSession(challengeUrl);
+            if (redirectedData !== null) {
+              return redirectedData;
+            }
+            let bypassUrl = url;
+            let bypassProvider = provider;
+            try {
+              const challengeHost = getHost(challengeUrl);
+              if (challengeHost && challengeHost !== urlHost) {
+                bypassUrl = challengeUrl;
+                bypassProvider = providerFromHost(challengeHost);
+              }
+            } catch (e) {
+            }
+            const bypassSessionFile = sessionFileForProvider(bypassProvider);
+            if (fs.existsSync(bypassSessionFile)) {
+              try {
+                fs.unlinkSync(bypassSessionFile);
+              } catch (e) {
+              }
+            }
+            const newSession = yield getClearance(bypassUrl, bypassProvider, options);
+            if (!newSession) {
+              throw new Error(`Bypass fallito per ${bypassProvider}`);
+            }
+            if (options.meta && newSession.url) {
+              options.meta.finalUrl = newSession.url;
+            }
+            if (isUsefulHtml(newSession.response)) {
+              return newSession.response;
+            }
+            let finalUrl = bypassUrl === url ? currentUrl : bypassUrl;
+            if (newSession.url) {
+              try {
+                const oldUrlObj = new URL(bypassUrl);
+                const newUrlObj = new URL(newSession.url);
+                const newSessionHasSpecificTarget = newUrlObj.pathname !== "/" || Boolean(newUrlObj.search) || Boolean(newUrlObj.hash) || oldUrlObj.hostname === newUrlObj.hostname;
+                if (newSessionHasSpecificTarget) {
+                  finalUrl = newUrlObj.toString();
+                  if (options.meta) options.meta.finalUrl = finalUrl;
+                } else if (oldUrlObj.hostname !== newUrlObj.hostname) {
+                  oldUrlObj.hostname = newUrlObj.hostname;
+                  oldUrlObj.protocol = newUrlObj.protocol;
+                  finalUrl = oldUrlObj.toString();
+                  if (options.meta) options.meta.finalUrl = finalUrl;
+                }
+              } catch (e) {
+              }
+            }
+            const res = yield doRequest(finalUrl, newSession);
+            updateMetaFinalUrl(res);
+            return res.data;
           }
           throw err;
         }
@@ -8192,7 +8159,7 @@ if (!IS_SERVER) {
   };
 } else {
   let getGuardoserieBaseUrl = function() {
-    return "https://guardoserie.run";
+    return "https://guardoserie.watch";
   }, getMappingApiUrl = function() {
     return "https://animemapping.realbestia.com";
   }, normalizeConfigBoolean = function(value) {

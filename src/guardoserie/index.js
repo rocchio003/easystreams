@@ -29,7 +29,7 @@ if (!IS_SERVER) {
     const { extractLoadm, extractUqload, extractDropLoad, extractMixDrop, extractSuperVideo } = require('../extractors');
     const STEP_BENCH_ENABLED = String(process.env.PROVIDER_STEP_BENCH || '').trim().toLowerCase() === '1';
     function getGuardoserieBaseUrl() {
-        return 'https://guardoserie.run';
+        return 'https://guardoserie.watch';
     }
     const TMDB_API_KEY = '68e094699525b18a70bab2f86b1fa706';
     function getMappingApiUrl() {
