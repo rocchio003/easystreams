@@ -751,7 +751,6 @@ var require_guardahd = __commonJS({
                 console.log(`[GuardaHD] Attempting StreamHG extraction for ${streamUrl}`);
                 const extracted = yield extractStreamHG(streamUrl);
                 if (extracted && extracted.url) {
-                  fetch(extracted.url, { method: "GET", headers: { "User-Agent": USER_AGENT, "Referer": streamUrl } }).then(() => console.log(`[GuardaHD] StreamHG warm-up OK: ${extracted.url}`)).catch((e) => console.log(`[GuardaHD] StreamHG warm-up error: ${e.message}`));
                   let quality = getQualityFromUrl(extracted.url) || "HD";
                   const playlistQuality = yield checkQualityFromPlaylist(extracted.url, extracted.headers || {});
                   if (playlistQuality) quality = playlistQuality;
