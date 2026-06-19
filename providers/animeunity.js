@@ -7253,13 +7253,6 @@ var require_loadm = __commonJS({
   "src/extractors/loadm.js"(exports2, module2) {
     var CryptoJS = require_crypto_js();
     var { USER_AGENT: USER_AGENT2 } = require_common();
-    var STREAMINGCOMMUNITY_PROXY = typeof process !== "undefined" && process.env.STREAMINGCOMMUNITY_PROXY || "";
-    var ProxyAgent = null;
-    try {
-      ProxyAgent = require("undici").ProxyAgent;
-    } catch (_) {
-      ProxyAgent = null;
-    }
     function extractLoadm(playerUrl, referer = "guardoserie.horse") {
       return __async(this, null, function* () {
         try {
@@ -7271,24 +7264,13 @@ var require_loadm = __commonJS({
           const key = CryptoJS.enc.Utf8.parse("kiemtienmua911ca");
           const iv = CryptoJS.enc.Utf8.parse("1234567890oiuytr");
           const queryParams = `id=${encodeURIComponent(id)}&w=2560&h=1440&r=${encodeURIComponent(referer)}`;
-          let response = yield fetch(`${apiUrl}?${queryParams}`, {
+          const response = yield fetch(`${apiUrl}?${queryParams}`, {
             headers: {
               "User-Agent": USER_AGENT2,
               "Referer": baseUrl,
               "X-Requested-With": "XMLHttpRequest"
             }
           });
-          if (!response.ok && response.status === 429 && STREAMINGCOMMUNITY_PROXY && ProxyAgent) {
-            console.log(`[Loadm] Rate limited, retrying via SOCKS5 proxy`);
-            response = yield fetch(`${apiUrl}?${queryParams}`, {
-              headers: {
-                "User-Agent": USER_AGENT2,
-                "Referer": baseUrl,
-                "X-Requested-With": "XMLHttpRequest"
-              },
-              dispatcher: new ProxyAgent(STREAMINGCOMMUNITY_PROXY)
-            });
-          }
           if (!response.ok) {
             const errorBody = yield response.text().catch(() => "");
             console.error(`[Loadm] API error: ${response.status} | Body: ${errorBody.substring(0, 100)}`);
@@ -7697,6 +7679,8 @@ var animeUnityCookies = /* @__PURE__ */ new Map();
 var animeUnityCsrfToken = "";
 var animeUnitySessionWarmupPromise = null;
 function getCached(map, key) {
+  const isReactNative = typeof navigator !== "undefined" && navigator.product === "ReactNative" || typeof global !== "undefined" && global.HermesInternal;
+  if (isReactNative) return void 0;
   const entry = map.get(key);
   if (!entry) return void 0;
   if (entry.expiresAt <= Date.now()) {
@@ -7706,6 +7690,20 @@ function getCached(map, key) {
   return entry.value;
 }
 function setCached(map, key, value, ttlMs) {
+  const isReactNative = typeof navigator !== "undefined" && navigator.product === "ReactNative" || typeof global !== "undefined" && global.HermesInternal;
+  if (isReactNative) return value;
+  for (const [k, entry] of map.entries()) {
+    if (entry.expiresAt <= Date.now()) {
+      map.delete(k);
+    }
+  }
+  const MAX_CACHE_ENTRIES = 500;
+  if (map.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = map.keys().next().value;
+    if (oldestKey !== void 0) {
+      map.delete(oldestKey);
+    }
+  }
   map.set(key, { value, expiresAt: Date.now() + ttlMs });
   return value;
 }

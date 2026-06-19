@@ -14,7 +14,7 @@ Il progetto è progettato per essere versatile e può essere utilizzato in due m
 -   **GuardaHD** (Film)
 -   **GuardoSerie** (Film & Serie TV)
 -   **StreamingCommunity** (Film & Serie TV)
--   **vidxGo** (Film & Serie TV)
+-   **CB01** (Film & Serie TV)
 
 ---
 
